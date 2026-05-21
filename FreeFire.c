@@ -1,14 +1,11 @@
 //=============================================================================
-// Desafio Free-Fire Aventureiro - Sistema de Inventario - Mochila de Loot
-// Versao Avancada: Vetor (lista sequencial) + Lista Encadeada
-//
-// Comparacao de estruturas de dados:
-//   - Vetor      : acesso O(1) por indice, busca binaria apos ordenacao
-//   - Lista enc. : insercao/remocao O(1) no inicio, sem necessidade de realocar
-//
-// Operacoes implementadas nas duas estruturas:
-//   Inserir | Remover | Listar | Busca Sequencial
-//   + Ordenacao (Bubble Sort) e Busca Binaria exclusivas do vetor
+// Desafio Free-Fire - Sistema de Inventario - Mochila de Loot- Torre de Fuga
+// - Adiciona struct Componente (nome, tipo, prioridade)
+// - Implementa Bubble Sort por nome, Insertion Sort por tipo e Selection Sort por prioridade
+// - Adiciona medicao de tempo com clock() e contador de comparacoes por algoritmo
+// - Implementa busca binaria por nome (requer ordenacao previa)
+// - Adiciona montagem final com confirmacao do componente-chave
+// - Integra novo modulo ao menu principal como opcao 3
 //=============================================================================
 
 #include <stdio.h>
@@ -23,6 +20,12 @@
 #define MAX_ITENS  10    // Capacidade maxima do vetor
 #define MAX_NOME   30    // Tamanho maximo do nome do item
 #define MAX_TIPO   20    // Tamanho maximo do tipo do item
+
+// =============================================================================
+// --- CONSTANTES DO MODULO TORRE DE FUGA ---
+// =============================================================================
+
+#define MAX_COMPONENTES 20   // Capacidade maxima de componentes da torre
 
 // =============================================================================
 // --- STRUCT ITEM ---
@@ -49,6 +52,20 @@ typedef struct No {
     Item        dados;
     struct No  *proximo;
 } No;
+
+// =============================================================================
+// --- STRUCT COMPONENTE ---
+// Representa cada peca necessaria para montar a Torre de Fuga.
+//   nome      : identificador da peca   (ex: "chip central")
+//   tipo      : categoria da peca       (ex: "controle", "suporte", "propulsao")
+//   prioridade: ordem de importancia na montagem (1 = menor, 10 = critica)
+// =============================================================================
+
+typedef struct {
+    char nome[MAX_NOME];
+    char tipo[MAX_TIPO];
+    int  prioridade;
+} Componente;
 
 // =============================================================================
 // --- ESTRUTURA: VETOR ---
@@ -80,6 +97,15 @@ int comparacoesBinVetor  = 0; // comparacoes na busca binaria do vetor
 int comparacoesSeqLista  = 0; // comparacoes na busca sequencial da lista
 
 // =============================================================================
+// --- VARIAVEIS GLOBAIS - MODULO TORRE DE FUGA ---
+// =============================================================================
+
+Componente torre[MAX_COMPONENTES]; // vetor de componentes da torre
+int totalComponentes = 0;          // quantidade de componentes cadastrados
+int torreOrdenadaPorNome = 0;      // flag: 1 = ordenada por nome (habilita busca binaria)
+int comparacoesTorre = 0;          // contador de comparacoes dos algoritmos de ordenacao
+
+// =============================================================================
 // --- PROTOTIPOS ---
 // =============================================================================
 
@@ -103,6 +129,16 @@ void lerString(char *destino, int tamanho);
 void menuVetor();
 void menuLista();
 void menuPrincipal();
+
+// -- Torre de Fuga --
+void cadastrarComponente();
+void mostrarComponentes(Componente v[], int n);
+void bubbleSortNome(Componente v[], int n);
+void insertionSortTipo(Componente v[], int n);
+void selectionSortPrioridade(Componente v[], int n);
+void medirTempo(void (*algoritmo)(Componente[], int), Componente v[], int n, const char *nomeAlg);
+void buscaBinariaPorNome(Componente v[], int n, char alvo[]);
+void menuTorre();
 
 // =============================================================================
 // --- FUNCAO PRINCIPAL ---
@@ -128,6 +164,7 @@ void menuPrincipal() {
         printf("╠══════════════════════════════════════╣\n");
         printf("║  1. Mochila com VETOR                ║\n");
         printf("║  2. Mochila com LISTA ENCADEADA      ║\n");
+        printf("║  3. Torre de Fuga (Missao Final)     ║\n");
         printf("║  0. Sair                             ║\n");
         printf("╚══════════════════════════════════════╝\n");
         printf("Escolha a estrutura: ");
@@ -137,6 +174,7 @@ void menuPrincipal() {
         switch (opcao) {
             case 1: menuVetor(); break;
             case 2: menuLista(); break;
+            case 3: menuTorre(); break;
             case 0: printf("\n[ Encerrando o jogo... Ate a proxima! ]\n\n"); break;
             default: printf("\n[!] Opcao invalida!\n");
         }
@@ -633,6 +671,315 @@ void liberarLista() {
     }
 
     listaHead = NULL;
+}
+
+// =============================================================================
+// ==================== MODULO TORRE DE FUGA ===================================
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// MENU TORRE DE FUGA
+// Sub-menu dedicado ao modulo da missao final.
+// Apresenta opcoes de cadastro, ordenacao, busca e montagem final.
+// -----------------------------------------------------------------------------
+
+void menuTorre() {
+    int opcao;
+    do {
+        printf("\n╔══════════════════════════════════════════╗\n");
+        printf("║    TORRE DE FUGA - MISSAO FINAL          ║\n");
+        printf("╠══════════════════════════════════════════╣\n");
+        printf("║  1. Cadastrar componente                 ║\n");
+        printf("║  2. Listar componentes                   ║\n");
+        printf("║  3. Bubble Sort  (ordenar por nome)      ║\n");
+        printf("║  4. Insertion Sort (ordenar por tipo)    ║\n");
+        printf("║  5. Selection Sort (ordenar prioridade)  ║\n");
+        printf("║  6. Busca binaria por nome               ║\n");
+        printf("║  7. Montagem final da torre              ║\n");
+        printf("║  0. Voltar ao menu principal             ║\n");
+        printf("╚══════════════════════════════════════════╝\n");
+        printf("Escolha: ");
+        scanf("%d", &opcao);
+        while (getchar() != '\n');
+
+        switch (opcao) {
+            case 1: cadastrarComponente(); break;
+            case 2:
+                mostrarComponentes(torre, totalComponentes);
+                break;
+            case 3:
+                if (totalComponentes < 2) { printf("\n[!] Cadastre ao menos 2 componentes.\n"); break; }
+                medirTempo(bubbleSortNome, torre, totalComponentes, "Bubble Sort (por nome)");
+                torreOrdenadaPorNome = 1;
+                mostrarComponentes(torre, totalComponentes);
+                break;
+            case 4:
+                if (totalComponentes < 2) { printf("\n[!] Cadastre ao menos 2 componentes.\n"); break; }
+                medirTempo(insertionSortTipo, torre, totalComponentes, "Insertion Sort (por tipo)");
+                torreOrdenadaPorNome = 0; // nao ordenada por nome, desabilita busca binaria
+                mostrarComponentes(torre, totalComponentes);
+                break;
+            case 5:
+                if (totalComponentes < 2) { printf("\n[!] Cadastre ao menos 2 componentes.\n"); break; }
+                medirTempo(selectionSortPrioridade, torre, totalComponentes, "Selection Sort (por prioridade)");
+                torreOrdenadaPorNome = 0;
+                mostrarComponentes(torre, totalComponentes);
+                break;
+            case 6: {
+                if (totalComponentes == 0) { printf("\n[!] Nenhum componente cadastrado.\n"); break; }
+                if (!torreOrdenadaPorNome) {
+                    printf("\n[!] Ordene por nome (Bubble Sort) antes de usar a busca binaria!\n");
+                    break;
+                }
+                char alvo[MAX_NOME];
+                printf("\nNome do componente-chave: ");
+                lerString(alvo, MAX_NOME);
+                buscaBinariaPorNome(torre, totalComponentes, alvo);
+                break;
+            }
+            case 7: {
+                // Montagem final: exibe componentes ordenados e confirma componente-chave
+                if (totalComponentes == 0) { printf("\n[!] Nenhum componente cadastrado.\n"); break; }
+                printf("\n");
+                printf("╔══════════════════════════════════════════╗\n");
+                printf("║         MONTAGEM FINAL DA TORRE          ║\n");
+                printf("╚══════════════════════════════════════════╝\n");
+                mostrarComponentes(torre, totalComponentes);
+
+                char chave[MAX_NOME];
+                printf("\nInforme o componente-chave para ativar a torre: ");
+                lerString(chave, MAX_NOME);
+
+                // Busca sequencial para confirmar presenca da chave
+                int encontrado = 0;
+                for (int i = 0; i < totalComponentes; i++) {
+                    if (strcmp(torre[i].nome, chave) == 0) {
+                        encontrado = 1;
+                        printf("\n[*] Componente-chave \"%s\" confirmado!\n", chave);
+                        printf("    Tipo      : %s\n", torre[i].tipo);
+                        printf("    Prioridade: %d\n", torre[i].prioridade);
+                        printf("\n>>> TORRE ATIVADA! FUGA INICIADA! BOA SORTE! <<<\n");
+                        break;
+                    }
+                }
+                if (!encontrado)
+                    printf("\n[X] Componente-chave nao encontrado! Torre nao pode ser ativada.\n");
+                break;
+            }
+            case 0: break;
+            default: printf("\n[!] Opcao invalida!\n");
+        }
+    } while (opcao != 0);
+}
+
+// -----------------------------------------------------------------------------
+// CADASTRAR COMPONENTE
+// Lê nome, tipo e prioridade de um novo componente e o insere no vetor.
+// Valida prioridade no intervalo [1, 10].
+// -----------------------------------------------------------------------------
+
+void cadastrarComponente() {
+    if (totalComponentes >= MAX_COMPONENTES) {
+        printf("\n[!] Limite de %d componentes atingido!\n", MAX_COMPONENTES);
+        return;
+    }
+
+    Componente c;
+    printf("\n--- Cadastrar Componente ---\n");
+
+    printf("Nome       : ");
+    lerString(c.nome, MAX_NOME);
+
+    printf("Tipo (controle/suporte/propulsao/energia): ");
+    lerString(c.tipo, MAX_TIPO);
+
+    printf("Prioridade (1-10): ");
+    scanf("%d", &c.prioridade);
+    while (getchar() != '\n');
+
+    if (c.prioridade < 1 || c.prioridade > 10) {
+        printf("\n[!] Prioridade invalida! Use valores entre 1 e 10.\n");
+        return;
+    }
+
+    torre[totalComponentes] = c;
+    totalComponentes++;
+    printf("\n[+] Componente \"%s\" cadastrado! (%d/%d)\n", c.nome, totalComponentes, MAX_COMPONENTES);
+}
+
+// -----------------------------------------------------------------------------
+// MOSTRAR COMPONENTES
+// Exibe o vetor de componentes formatado com indice, nome, tipo e prioridade.
+// Usada apos cada operacao para feedback visual imediato.
+// -----------------------------------------------------------------------------
+
+void mostrarComponentes(Componente v[], int n) {
+    printf("\n======== COMPONENTES DA TORRE (%d/%d) ========\n", n, MAX_COMPONENTES);
+    if (n == 0) {
+        printf("  [ Nenhum componente cadastrado ]\n");
+        printf("=============================================\n");
+        return;
+    }
+    for (int i = 0; i < n; i++) {
+        printf("  [%2d] %-22s | %-12s | Prioridade: %2d\n",
+               i + 1, v[i].nome, v[i].tipo, v[i].prioridade);
+    }
+    printf("=============================================\n");
+}
+
+// -----------------------------------------------------------------------------
+// BUBBLE SORT POR NOME
+// Compara pares adjacentes pelo campo nome (string) e troca se necessario.
+// O elemento "maior" (maior nome lexicografico) borbulha para o final.
+// Complexidade: O(n²) — didatico, simples de entender e implementar.
+// Contador: incrementa comparacoesTorre a cada strcmp executado.
+// -----------------------------------------------------------------------------
+
+void bubbleSortNome(Componente v[], int n) {
+    comparacoesTorre = 0;
+    Componente temp;
+
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - 1 - i; j++) {
+            comparacoesTorre++;
+            if (strcmp(v[j].nome, v[j + 1].nome) > 0) {
+                temp     = v[j];
+                v[j]     = v[j + 1];
+                v[j + 1] = temp;
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// INSERTION SORT POR TIPO
+// Percorre o vetor e, para cada elemento, insere-o na posicao correta
+// em relacao aos elementos ja ordenados antes dele (por tipo, string).
+// Eficiente para vetores quase ordenados: O(n) no melhor caso, O(n²) no pior.
+// Contador: incrementa comparacoesTorre a cada strcmp executado.
+// -----------------------------------------------------------------------------
+
+void insertionSortTipo(Componente v[], int n) {
+    comparacoesTorre = 0;
+    Componente chave;
+    int j;
+
+    for (int i = 1; i < n; i++) {
+        chave = v[i]; // elemento a ser inserido na posicao correta
+        j = i - 1;
+
+        // Desloca elementos maiores que a chave uma posicao a frente
+        while (j >= 0) {
+            comparacoesTorre++;
+            if (strcmp(v[j].tipo, chave.tipo) > 0) {
+                v[j + 1] = v[j];
+                j--;
+            } else {
+                break;
+            }
+        }
+        v[j + 1] = chave; // insere a chave na posicao correta
+    }
+}
+
+// -----------------------------------------------------------------------------
+// SELECTION SORT POR PRIORIDADE
+// A cada passagem, encontra o elemento de MAIOR prioridade no subvetor
+// restante e o coloca no inicio (ordenacao decrescente: 10 → 1).
+// Assim o componente mais critico aparece primeiro na listagem.
+// Complexidade: O(n²) — numero de comparacoes fixo independente dos dados.
+// Contador: incrementa comparacoesTorre a cada comparacao de prioridade.
+// -----------------------------------------------------------------------------
+
+void selectionSortPrioridade(Componente v[], int n) {
+    comparacoesTorre = 0;
+    int    idxMax;
+    Componente temp;
+
+    for (int i = 0; i < n - 1; i++) {
+        idxMax = i;
+        for (int j = i + 1; j < n; j++) {
+            comparacoesTorre++;
+            if (v[j].prioridade > v[idxMax].prioridade) {
+                idxMax = j; // novo maximo encontrado
+            }
+        }
+        // Troca o maior encontrado com o da posicao atual
+        if (idxMax != i) {
+            temp    = v[i];
+            v[i]    = v[idxMax];
+            v[idxMax] = temp;
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// MEDIR TEMPO
+// Recebe um ponteiro para funcao de ordenacao, executa e mede o tempo
+// com clock() (resolucao em CLOCKS_PER_SEC, tipicamente microsegundos).
+// Exibe comparacoes e tempo apos a execucao.
+//
+// Parametros:
+//   algoritmo : ponteiro para a funcao de ordenacao a ser chamada
+//   v         : vetor de componentes
+//   n         : tamanho do vetor
+//   nomeAlg   : nome do algoritmo (para exibicao)
+// -----------------------------------------------------------------------------
+
+void medirTempo(void (*algoritmo)(Componente[], int), Componente v[], int n, const char *nomeAlg) {
+    comparacoesTorre = 0;
+
+    clock_t inicio = clock();
+    algoritmo(v, n); // chama o algoritmo passado como ponteiro
+    clock_t fim = clock();
+
+    double tempoMs = ((double)(fim - inicio) / CLOCKS_PER_SEC) * 1000.0;
+
+    printf("\n[*] %s concluido!\n", nomeAlg);
+    printf("    Comparacoes realizadas : %d\n", comparacoesTorre);
+    printf("    Tempo de execucao      : %.4f ms\n", tempoMs);
+}
+
+// -----------------------------------------------------------------------------
+// BUSCA BINARIA POR NOME
+// Exige que o vetor esteja ordenado por nome (use Bubble Sort antes).
+// Divide o espaco de busca ao meio a cada iteracao: O(log n).
+// Exibe o resultado e o numero de comparacoes para comparacao didatica
+// com a busca sequencial.
+//
+// Parametros:
+//   v    : vetor de componentes ja ordenado por nome
+//   n    : tamanho do vetor
+//   alvo : nome do componente a localizar
+// -----------------------------------------------------------------------------
+
+void buscaBinariaPorNome(Componente v[], int n, char alvo[]) {
+    int inicio = 0, fim = n - 1, meio, comparacoes = 0, resultado;
+
+    printf("\n--- Busca Binaria por Nome ---\n");
+
+    while (inicio <= fim) {
+        meio = (inicio + fim) / 2;
+        comparacoes++;
+        resultado = strcmp(v[meio].nome, alvo);
+
+        if (resultado == 0) {
+            printf("\n[v] Componente-chave \"%s\" encontrado na posicao %d!\n", alvo, meio + 1);
+            printf("    Tipo      : %s\n", v[meio].tipo);
+            printf("    Prioridade: %d\n", v[meio].prioridade);
+            printf("    Comparacoes (binaria)     : %d\n", comparacoes);
+            printf("    Comparacoes (seq. estimada): %d\n", meio + 1);
+            printf("\n>>> COMPONENTE-CHAVE CONFIRMADO! TORRE PRONTA PARA ATIVAR! <<<\n");
+            return;
+        } else if (resultado < 0) {
+            inicio = meio + 1; // alvo esta na metade direita
+        } else {
+            fim = meio - 1;    // alvo esta na metade esquerda
+        }
+    }
+
+    printf("\n[!] Componente \"%s\" nao encontrado.\n", alvo);
+    printf("    Comparacoes realizadas: %d\n", comparacoes);
 }
 
 // =============================================================================
